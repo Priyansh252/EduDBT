@@ -1,31 +1,18 @@
-import os
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from starlette.middleware.cors import CORSMiddleware
-import uvicorn
+from fastapi import FastAPI, HTTPException, Depends, status
+import asyncpg
+from core.db import lifespan, get_db_connection
+from routers import students, bank_accounts
 
-app = FastAPI()
+app = FastAPI(title="DBT Backend API", version="1.0.0", lifespan=lifespan)
 
+app.include_router(students.router)
+app.include_router(bank_accounts.router)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/")
-async def root():
-    return {"message": "Python backend running with CORS & error handler ✅"}
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3300))  # default 3300 if not set
-    uvicorn.run(
-        "main:app",
-        host="localhost",
-        port=port,
-        reload=True
-    )
+@app.get("/health")
+async def health(db_pool: asyncpg.Pool = Depends(get_db_connection)):
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        return {"status": "ok"}
+    except:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="DB not available")
